@@ -1,0 +1,1 @@
+"""Aplicação de e-commerce."""
