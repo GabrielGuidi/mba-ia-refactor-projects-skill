@@ -1,0 +1,4 @@
+interface:
+  display_name: "Refatorar Arquitetura"
+  short_description: "Audita e refatora projetos para MVC"
+  default_prompt: "Use $refactor-arch para analisar, auditar e refatorar este projeto para MVC."
