@@ -1,7 +1,8 @@
 from flask import Blueprint, current_app, jsonify, request
 
-from src.controllers import order_controller, product_controller, user_controller
+from src.controllers import admin_controller, order_controller, product_controller, user_controller
 from src.database import get_db
+from src.middlewares.admin_auth import admin_required
 
 
 api = Blueprint("api", __name__)
@@ -121,3 +122,15 @@ def health():
             "debug": current_app.debug,
         }
     )
+
+
+@api.post("/admin/reset-db")
+@admin_required
+def reset_database():
+    return respond(admin_controller.reset_database())
+
+
+@api.post("/admin/query")
+@admin_required
+def execute_query():
+    return respond(admin_controller.execute_diagnostic(request.get_json(silent=True)))

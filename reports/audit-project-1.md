@@ -133,7 +133,7 @@
 - Tratamento de erros centralizado.
 - SQL parametrizado e checkout de pedido transacional.
 - Senhas migradas para hash seguro e removidas das respostas.
-- Endpoints administrativos inseguros removidos.
+- Endpoints administrativos preservados com `X-Admin-Token`; o endpoint de query aceita somente diagnósticos predefinidos e de leitura.
 - Consultas N+1 de pedidos substituídas por JOIN.
 - Os 10 findings originais foram corrigidos na reauditoria.
 
@@ -144,7 +144,10 @@
 - CRUD de produtos: PASS.
 - Criação de usuário e login: PASS.
 - Criação, listagem e atualização de pedido: PASS.
-- Endpoint administrativo removido retorna HTTP 404: PASS.
+- `POST /admin/query` sem token retorna HTTP 401: PASS.
+- `POST /admin/query` com token e diagnóstico permitido retorna HTTP 200: PASS.
+- `POST /admin/query` bloqueia SQL arbitrário com HTTP 400: PASS.
+- `POST /admin/reset-db` com token e banco descartável retorna HTTP 200: PASS.
 - Boot real com debug desligado: PASS.
 - `GET /health`: HTTP 200.
 - `GET /produtos`: HTTP 200.

@@ -54,9 +54,26 @@ No Express, substituir callback longo por `router.post('/orders', controller.cre
 
 Quando: route ou controller executa SQL.
 
-Antes: `cursor.execute("SELECT * FROM products")` na route.
+Antes:
 
-Depois: `products = product_model.list_all()` no controller.
+```python
+@products.get("/products")
+def list_products():
+    rows = get_db().execute("SELECT * FROM products").fetchall()
+    return jsonify([dict(row) for row in rows])
+```
+
+Depois:
+
+```python
+@products.get("/products")
+def list_products():
+    return jsonify(product_controller.list_products())
+
+# models/product.py
+def list_all():
+    return get_db().execute("SELECT * FROM products").fetchall()
+```
 
 No Express, mover `db.all(...)` para `models/product.js`. Validar resultado e erros.
 
@@ -64,7 +81,11 @@ No Express, mover `db.all(...)` para `models/product.js`. Validar resultado e er
 
 Quando: porta, debug, caminho ou secret está no código.
 
-Antes, Python: `SECRET_KEY = "secret"`.
+Antes:
+
+```python
+app.config["SECRET_KEY"] = "secret"
+```
 
 Depois:
 
@@ -72,9 +93,17 @@ Depois:
 SECRET_KEY = os.environ["SECRET_KEY"]
 ```
 
-Antes, Node.js: `paymentKey: "pk_live_..."`.
+Antes, Node.js:
 
-Depois: `paymentKey: process.env.PAYMENT_GATEWAY_KEY`.
+```javascript
+const config = { paymentKey: "pk_live_..." };
+```
+
+Depois:
+
+```javascript
+const config = { paymentKey: process.env.PAYMENT_GATEWAY_KEY };
+```
 
 Destino: `config/`. Falhar cedo quando secret obrigatório estiver ausente. Validar boot com ambiente de teste.
 
@@ -100,9 +129,22 @@ Express/SQLite: `db.get('... WHERE email = ?', [email], callback)`. Validar com 
 
 Quando: handlers repetem `try/except` ou `try/catch` e expõem detalhes.
 
-Antes: `return jsonify({'error': str(error)}), 500` em cada route.
+Antes:
 
-Depois, Flask: registrar `@app.errorhandler(AppError)` e retornar mensagem pública.
+```python
+try:
+    return create_order(request.get_json())
+except Exception as error:
+    return jsonify({"error": str(error)}), 500
+```
+
+Depois, Flask:
+
+```python
+@app.errorhandler(AppError)
+def handle_app_error(error):
+    return jsonify({"error": error.message}), error.status
+```
 
 Depois, Express: encaminhar `next(error)` e registrar middleware `(error, req, res, next)`.
 
@@ -112,9 +154,19 @@ Destino: `middlewares/`. Validar 400, 404 e 500.
 
 Quando: a mesma validação ou serialização aparece em vários endpoints.
 
-Antes: repetir cálculo de atraso em três loops.
+Antes:
 
-Depois: `task.is_overdue()` ou `serialize_task(task)` usado por todos.
+```python
+if task.due_date and task.due_date < utc_now() and task.status != "done":
+    data["overdue"] = True
+```
+
+Depois:
+
+```python
+def is_overdue(self):
+    return bool(self.due_date and self.due_date < utc_now() and self.status != "done")
+```
 
 Destino: model para regra da entidade; controller/helper para representação. Validar respostas equivalentes.
 

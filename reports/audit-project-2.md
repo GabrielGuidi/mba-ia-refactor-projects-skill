@@ -149,7 +149,9 @@
 - Exclusão administrativa: HTTP 200.
 - Caminhos públicos originais preservados.
 
-### Pendência de dependências
+### Dependências após correção
 
-- A árvore instalada ainda possui dependências transitivas deprecated e 13 alertas do `npm audit`.
-- A atualização não foi forçada porque pode introduzir breaking changes fora do escopo funcional validado.
+- `npm audit fix` aplicou correções compatíveis sem `--force`.
+- SQLite foi atualizado explicitamente de 5.x para 6.0.1, compatível com o requisito Node 20+.
+- Checkout, relatório e exclusão foram revalidados após a atualização.
+- `npm audit` final: 0 vulnerabilidades.

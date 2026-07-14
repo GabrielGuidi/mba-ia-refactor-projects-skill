@@ -98,7 +98,7 @@ Stack: Python, Flask 3.0.0, Flask-SQLAlchemy 3.1.1 e SQLite. Foram analisados 16
 - Auditoria: 10 findings, sendo 3 `CRITICAL`, 2 `HIGH`, 3 `MEDIUM` e 2 `LOW`.
 - Antes: 4 arquivos misturavam HTTP, domínio, banco e configuração.
 - Depois: estrutura MVC em `src/`, separada por configuração, models, controllers, views e middlewares.
-- Segurança: SQL parametrizado, senhas com hash seguro, secrets fora do código e endpoints administrativos inseguros removidos.
+- Segurança: SQL parametrizado, senhas com hash seguro, secrets fora do código e endpoints administrativos preservados com autenticação e operações permitidas.
 - Performance: consulta N+1 de pedidos substituída por JOIN.
 - Validação: compilação, smoke tests, CRUD, login, pedidos e boot real aprovados.
 - Relatório: [`reports/audit-project-1.md`](reports/audit-project-1.md).
@@ -112,7 +112,7 @@ Stack: Python, Flask 3.0.0, Flask-SQLAlchemy 3.1.1 e SQLite. Foram analisados 16
 - Integridade: checkout e exclusão passaram a usar transações.
 - Performance: relatório N+1 substituído por JOIN.
 - Validação: sintaxe, boot, checkout aprovado e recusado, relatório e exclusão aprovados.
-- Pendência: 13 alertas do `npm audit` permanecem na árvore transitiva para evitar atualização forçada com breaking changes.
+- Dependências: Express corrigido por `npm audit fix` e SQLite atualizado explicitamente para 6.0.1; `npm audit` retorna 0 vulnerabilidades.
 - Relatório: [`reports/audit-project-2.md`](reports/audit-project-2.md).
 
 ### Projeto 3: `task-manager-api`
@@ -134,6 +134,51 @@ Stack: Python, Flask 3.0.0, Flask-SQLAlchemy 3.1.1 e SQLite. Foram analisados 16
 | `ecommerce-api-legacy` | God Class | MVC com services | PASS |
 | `task-manager-api` | MVC parcial sem controllers | MVC completo aproveitando a estrutura | PASS |
 
+### Evidências de execução
+
+Os trechos abaixo foram capturados após a refatoração final.
+
+#### Projeto 1
+
+```text
+* Serving Flask app 'src.app'
+* Debug mode: off
+* Running on http://127.0.0.1:5000
+GET /health -> HTTP 200
+GET /produtos -> HTTP 200
+POST /admin/query -> HTTP 200
+POST /admin/reset-db -> HTTP 200
+```
+
+Os endpoints administrativos foram executados com `X-Admin-Token` e banco descartável.
+
+#### Projeto 2
+
+```text
+> npm start
+LMS rodando na porta 3000.
+POST /api/checkout -> HTTP 200
+GET /api/admin/financial-report -> HTTP 200
+DELETE /api/users/2 -> HTTP 200
+found 0 vulnerabilities
+```
+
+#### Projeto 3
+
+```text
+Seed concluído com sucesso!
+  3 usuários
+  4 categorias
+  10 tasks
+* Serving Flask app 'src_app'
+* Debug mode: off
+* Running on http://127.0.0.1:5000
+GET /health -> HTTP 200
+GET /tasks -> HTTP 200
+GET /reports/summary -> HTTP 200
+POST /login -> HTTP 200
+```
+
 ### Checklist de validação
 
 | Critério | Projeto 1 | Projeto 2 | Projeto 3 |
@@ -154,12 +199,14 @@ Stack: Python, Flask 3.0.0, Flask-SQLAlchemy 3.1.1 e SQLite. Foram analisados 16
 
 ## Construção da Skill
 
+A ferramenta escolhida foi o **OpenAI Codex**. O desafio permite Codex e orienta adaptar a convenção usada nos exemplos de Claude Code.
+
 A skill foi dividida em um arquivo de orquestração e cinco referências. Essa divisão mantém o fluxo principal curto e carrega detalhes somente na fase necessária.
 
 ### Estrutura
 
 ```text
-.claude/skills/refactor-arch/
+.agents/skills/refactor-arch/
 ├── SKILL.md
 ├── agents/openai.yaml
 └── references/
@@ -176,6 +223,8 @@ A skill foi dividida em um arquivo de orquestração e cinco referências. Essa 
 - `audit-report-template.md`: padroniza findings, resumo e plano de validação.
 - `mvc-guidelines.md`: delimita config, models, controllers, routes, services e middlewares.
 - `refactoring-playbook.md`: descreve 12 transformações com exemplos antes e depois.
+
+O Codex descobre skills do repositório em `.agents/skills/`. A invocação explícita usa `$refactor-arch`; `/skills` permite localizar a skill na CLI ou IDE.
 
 ### Decisões de design
 
@@ -219,30 +268,40 @@ Essa estratégia foi validada em:
 - O middleware inicial do projeto 1 transformava 404 em 500. O handler foi ajustado para preservar exceções HTTP.
 - O checkout Node.js precisou incluir criação de usuário, matrícula, pagamento e auditoria na mesma transação.
 - O seed do Task Manager importava `db` do entry point. O import foi corrigido para usar a extensão diretamente.
-- Dependências transitivas Node.js ainda geram 13 alertas. A atualização forçada foi evitada porque poderia introduzir breaking changes sem testes do fornecedor.
+- O audit inicial encontrou 13 vulnerabilidades Node.js. Correções compatíveis foram aplicadas sem `--force`; depois, SQLite foi atualizado explicitamente para 6.0.1 e os endpoints foram revalidados. O audit final encontrou 0 vulnerabilidades.
 
 ## Como Executar
 
 ### Pré-requisitos
 
 - Python 3.12 ou compatível.
-- Node.js 20 ou superior.
+- Node.js 20.17 ou superior.
 - npm.
-- Claude Code com suporte a custom skills.
+- OpenAI Codex com suporte a skills.
 - Git.
 
 ### Executar a skill
 
+Inicie o Codex dentro de cada projeto:
+
 ```bash
 cd code-smells-project
-claude "/refactor-arch"
+codex
 
 cd ../ecommerce-api-legacy
-claude "/refactor-arch"
+codex
 
 cd ../task-manager-api
-claude "/refactor-arch"
+codex
 ```
+
+Em cada sessão, invoque:
+
+```text
+$refactor-arch
+```
+
+Se a skill não aparecer, use `/skills` para confirmar a descoberta.
 
 ### Validar o projeto 1
 
@@ -252,10 +311,11 @@ python -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
 export SECRET_KEY="uma-chave-local-segura"
+export ADMIN_TOKEN="um-token-administrativo-local"
 python app.py
 ```
 
-A aplicação inicia em `http://localhost:5000`.
+A aplicação inicia em `http://localhost:5000`. Enviar `X-Admin-Token` nos endpoints `/admin/reset-db` e `/admin/query`.
 
 ### Validar o projeto 2
 
@@ -298,7 +358,7 @@ Para padronizar a sua auditoria e os relatórios gerados pela IA, utilize a segu
 ```bash
 # Executar a skill no projeto com problemas
 cd code-smells-project
-claude "/refactor-arch"
+$refactor-arch
 ```
 
 ```
@@ -384,7 +444,7 @@ src/
 - **Formato dos arquivos de referência:** Markdown
 - **Projetos-alvo:** Python/Flask (2 projetos) e Node.js/Express (1 projeto) (fornecidos no repositório base)
 
-> **Nota sobre a ferramenta:** Os exemplos deste documento usam o Claude Code (`.claude/skills/`) como referência, pois é a ferramenta utilizada no curso. Se você optar por Gemini CLI ou Codex, adapte o nome da pasta e o comando de invocação conforme a convenção dela — o conceito de skill e a estrutura interna (SKILL.md + arquivos de referência) permanecem os mesmos.
+> **Nota sobre a ferramenta:** O enunciado original usa Claude Code como exemplo. Esta entrega escolheu OpenAI Codex e adaptou a skill para `.agents/skills/`, com invocação explícita por `$refactor-arch`.
 
 ## Requisitos
 
@@ -432,7 +492,7 @@ Criar arquivos de referência em Markdown que forneçam à skill o conhecimento 
 | Guidelines de arquitetura | Regras do padrão MVC alvo (camadas Models, Views/Routes e Controllers, responsabilidades de cada uma) |
 | Playbook de refatoração | Padrões concretos de transformação para cada anti-pattern (com exemplos de código) |
 
-> **Nota:** Você tem liberdade para organizar os arquivos de referência como preferir — pode usar os nomes e a quantidade de arquivos que fizer sentido para sua skill. O importante é que todas as 5 áreas de conhecimento estejam cobertas. O nome da skill (`refactor-arch`) e o arquivo `SKILL.md` são obrigatórios e não devem ser alterados. O path da skill segue a convenção da ferramenta escolhida (no Claude Code, por exemplo, é `.claude/skills/refactor-arch/`).
+> **Nota:** Você tem liberdade para organizar os arquivos de referência como preferir. Esta entrega usa a convenção do Codex: `.agents/skills/refactor-arch/`.
 
 **Requisitos da skill:**
 
@@ -449,13 +509,13 @@ Execute sua skill nos 3 projetos e valide que ela funciona em todas as stacks.
 
 #### Projeto 1 — code-smells-project (Python/Flask)
 
-Invocar a skill no Claude Code:
+Invocar a skill no Codex:
 
-```bash
-claude "/refactor-arch"
+```text
+$refactor-arch
 ```
 
-> **Nota:** O comando acima é o exemplo com Claude Code. Se você estiver usando Gemini CLI ou Codex, utilize o comando equivalente para invocar uma skill na sua ferramenta.
+> **Nota:** No Codex, inicie a ferramenta dentro do projeto e envie `$refactor-arch` no prompt.
 
 - Verificar que a Fase 1 detecta corretamente a stack e imprime o resumo
 - Verificar que a Fase 2 encontra no mínimo 5 dos problemas documentados na sua análise manual
@@ -471,12 +531,16 @@ claude "/refactor-arch"
 
 Prove que sua skill é reutilizável em outro projeto de backend, mas com stack diferente.
 
-- Copiar a pasta `.claude/skills/refactor-arch/` para dentro de `ecommerce-api-legacy/`
+- Copiar a pasta `.agents/skills/refactor-arch/` para dentro de `ecommerce-api-legacy/`
 - Invocar a skill:
 
 ```bash
 cd ../ecommerce-api-legacy
-claude "/refactor-arch"
+codex
+```
+
+```text
+$refactor-arch
 ```
 
 - Verificar que as 3 fases executam corretamente neste projeto
@@ -487,12 +551,16 @@ claude "/refactor-arch"
 
 Agora o teste com um projeto Python/Flask que já possui alguma organização de camadas (models, routes, services, utils).
 
-- Copiar a pasta `.claude/skills/refactor-arch/` para dentro de `task-manager-api/`
+- Copiar a pasta `.agents/skills/refactor-arch/` para dentro de `task-manager-api/`
 - Invocar a skill:
 
 ```bash
 cd ../task-manager-api
-claude "/refactor-arch"
+codex
+```
+
+```text
+$refactor-arch
 ```
 
 - Verificar que:
@@ -543,7 +611,7 @@ Para cada projeto refatorado, valide o seguinte checklist:
 
 Repositório público no GitHub (fork do repositório base) contendo:
 
-- Skill completa em `.claude/skills/refactor-arch/` (dentro dos 3 projetos)
+- Skill completa em `.agents/skills/refactor-arch/` (dentro dos 3 projetos)
 - Código refatorado dos 3 projetos (resultado da execução da Fase 3, commitado no repositório)
 - Relatórios de auditoria em `reports/` (3 arquivos)
 - `README.md` atualizado
@@ -552,14 +620,14 @@ Repositório público no GitHub (fork do repositório base) contendo:
 
 Faça um fork do repositório base contendo os três projetos com code smells.
 
-> **Nota:** A estrutura abaixo usa Claude Code como exemplo (`.claude/skills/`). Se estiver usando outra ferramenta, adapte os caminhos conforme a convenção dela.
+> **Nota:** A estrutura abaixo está adaptada para OpenAI Codex (`.agents/skills/`).
 
 ```
 desafio-skills/
 ├── README.md                              # Sua documentação
 │
 ├── code-smells-project/                   # Projeto 1 — Python/Flask (API de E-commerce)
-│   ├── .claude/
+│   ├── .agents/
 │   │   └── skills/
 │   │       └── refactor-arch/             # ← SUA SKILL AQUI
 │   │           ├── SKILL.md
@@ -571,7 +639,7 @@ desafio-skills/
 │   └── requirements.txt
 │
 ├── ecommerce-api-legacy/                  # Projeto 2 — Node.js/Express (LMS API com checkout)
-│   ├── .claude/
+│   ├── .agents/
 │   │   └── skills/
 │   │       └── refactor-arch/             # ← CÓPIA DA SKILL
 │   │           └── ...
@@ -583,7 +651,7 @@ desafio-skills/
 │   └── package.json
 │
 ├── task-manager-api/                      # Projeto 3 — Python/Flask (API de Task Manager)
-│   ├── .claude/
+│   ├── .agents/
 │   │   └── skills/
 │   │       └── refactor-arch/             # ← CÓPIA DA SKILL
 │   │           └── ...
@@ -604,7 +672,7 @@ desafio-skills/
 
 **O que você vai criar:**
 
-- `.claude/skills/refactor-arch/` — A skill completa (SKILL.md + arquivos de referência)
+- `.agents/skills/refactor-arch/` — A skill completa (SKILL.md + arquivos de referência)
 - Código refatorado dos 3 projetos — resultado da execução da Fase 3, commitado no repositório
 - `reports/audit-project-{1,2,3}.md` — Relatório de auditoria de cada projeto
 - `README.md` — Documentação do seu processo
@@ -661,15 +729,21 @@ Escreva o SKILL.md e os arquivos de referência.
 ```bash
 # Projeto 1
 cd code-smells-project
-claude "/refactor-arch"
+codex
 
 # Projeto 2
 cd ../ecommerce-api-legacy
-claude "/refactor-arch"
+codex
 
 # Projeto 3
 cd ../task-manager-api
-claude "/refactor-arch"
+codex
+```
+
+Em cada sessão do Codex:
+
+```text
+$refactor-arch
 ```
 
 Salve a saída da Fase 2 de cada projeto em `reports/audit-project-{1,2,3}.md`.
@@ -695,10 +769,8 @@ A skill deve atingir os seguintes mínimos em **todos os 3 projetos**:
 
 ## Referências
 
-- [Claude Code: Skills](https://docs.anthropic.com/en/docs/claude-code/skills) — Documentação oficial sobre como criar e estruturar Skills
-- [Claude Code: Overview](https://docs.anthropic.com/en/docs/claude-code/overview) — Visão geral do Claude Code e suas capacidades
-- [The Complete Guide to Building Skills for Claude (PDF)](https://resources.anthropic.com/hubfs/The-Complete-Guide-to-Building-Skill-for-Claude.pdf) — Guia completo da Anthropic sobre construção de Skills
-- [Equipping Agents for the Real World with Agent Skills](https://claude.com/blog/equipping-agents-for-the-real-world-with-agent-skills) — Blog oficial da Anthropic sobre Agent Skills
+- [OpenAI Codex: Build skills](https://learn.chatgpt.com/docs/build-skills.md) — Convenção, descoberta e invocação de skills no Codex
+- [Agent Skills specification](https://agentskills.io/specification) — Especificação aberta usada pelo formato `SKILL.md`
 
 ---
 
